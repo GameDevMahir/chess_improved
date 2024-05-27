@@ -2,29 +2,31 @@ import pygame
 import os
 from PIL import Image
 import math
+from typing import List
 
-WIDTH = 800
-HEIGHT = 800
+
+WIDTH: int = 800
+HEIGHT: int = 800
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 OFF_WHITE = (240, 233, 220)
 
 # colour(b/w), piece, identifier no.
-START_POS = [
+START_POS: List[str] = [
     ['bR1', 'bN1', 'bB1', 'bQ0', 'bK0', 'bB2', 'bN2', 'bR2'],
     ['bP0', 'bP0', 'bP0', 'bP0', 'bP0', 'bP0', 'bP0', 'bP0'],
-    ['', '', '', '', '', '', '', ''],
-    ['', '', '', '', '', '', '', ''],
-    ['', '', '', '', '', '', '', ''],
-    ['', '', '', '', '', '', '', ''],
+    ['']*8,
+    ['']*8,
+    ['']*8,
+    ['']*8,
     ['wP0', 'wP0', 'wP0', 'wP0', 'wP0', 'wP0', 'wP0', 'wP0'],
     ['wR1', 'wN1', 'wB1', 'wQ0', 'wK0', 'wB2', 'wN2', 'wR2']]
 
-square_side = WIDTH/8
+square_side: int = WIDTH/8
 
-boardlist = START_POS.copy()
-turn = ''
+boardlist: List[str] = START_POS.copy()
+turn: str = ''
 
 
 class Board():
@@ -32,7 +34,8 @@ class Board():
         self.surf = surf
         self.boardlist = boardlist
 
-    def draw(self):
+    # Draws out the chess board
+    def draw(self) -> None:
         for i in range(8):
             for j in range(8):
                 if (i % 2 == 0) and (j % 2 == 0):
@@ -44,6 +47,7 @@ class Board():
 
                 square_rect = (i*square_side, j*square_side,
                                square_side, square_side)
+
                 pygame.draw.rect(self.surf, square_colour, square_rect)
 
 
