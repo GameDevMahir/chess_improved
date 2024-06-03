@@ -72,19 +72,20 @@ class Board():
                     pg.draw.rect(self.surf, RED, square_rect, 5)
 
     
-    def draw_pieces(self, piece_set) -> None:
+    def draw_pieces(self) -> None:
+        global dragging, piece_set
         for row in range(8):
             for col in range(8):
                 piece_name = boardlist[row][col]
-                if piece_name:
+                if piece_name and (row, col) != dragging:
                     img_path = f"piece/{piece_set}/{piece_name}.svg"
 
-                    piece_img = pg.image.load(img_path)
-                    piece_img = pg.transform.smoothscale(piece_img, (80, 80))
+                    img = pg.image.load(img_path)
+                    img = pg.transform.smoothscale(img, (80, 80))
 
                     square_rect = pg.Rect(col*square_side, row*square_side, square_side, square_side)
-                    piece_rect = piece_img.get_rect(center = square_rect.center)
-                    self.surf.blit(piece_img, piece_rect)
+                    piece_rect = img.get_rect(center = square_rect.center)
+                    self.surf.blit(img, piece_rect)
     
     def draw_legal_moves(self) -> None:
         global selected
@@ -94,6 +95,23 @@ class Board():
                 row, col = move
                 center = (col*square_side+square_side//2, row*square_side+square_side//2)
                 pg.draw.circle(screen, RED, center, 10)
+
+    def draw_dragging_piece(self, mouse_pos):
+        global dragging
+        row, col = dragging
+        mx, my = mouse_pos
+
+        piece_name = get_piece(dragging)
+
+        img_path = f"piece/{piece_set}/{piece_name}.svg"
+        img = pg.image.load(img_path)
+        img = pg.transform.smoothscale(img, (80, 80))
+
+        img_rect = img.get_rect()
+        img_rect.center = (mx, my)
+        
+        self.surf.blit(img, img_rect)
+
 
 #-----Utility Functions-----#  
 # Converts absolute coordinates to relative coordinates of square eg. (132, 273) -> (1, 2)         
@@ -468,46 +486,46 @@ def move(start_pos: tuple, end_pos: tuple) -> None:
     moves += 1
     turn = opp_colour(turn)
 
-def handle_event(event) -> None:
-    global selected
+def handle_event(event, board) -> None:
+    global selected, dragging
 
     if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
         #Get coordinates of the clicked square
-        mousepos = pg.mouse.get_pos()
-        col, row = convert_coords(mousepos)
+        mouse_pos = pg.mouse.get_pos()
+        col, row = convert_coords(mouse_pos)
 
         selected = (row, col)
-        dragging = (row, col)
+        if get_piece(selected):
+            dragging = (row, col)
 
     if event.type == pg.MOUSEBUTTONUP and event.button == 1:
         dragging = ()
-        mousepos = pg.mouse.get_pos()
-        col, row = convert_coords(mousepos)
+        mouse_pos = pg.mouse.get_pos()
+        col, row = convert_coords(mouse_pos)
         end_pos = (row, col)
 
         if end_pos in valid_moves(selected):
             move(selected, end_pos)
-    
-    if event.type == pg.MOUSEMOTION:
-        if dragging:
-            row, col = dragging
-            
-   
+
 def main():
     global boardlist
     running = True
     board = Board()
 
     while running:
+        promotion_check()                     
+        board.draw_squares()
+        board.draw_pieces()
+        board.draw_legal_moves()
+
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 running = False
-            handle_event(event)
-
-        promotion_check()                     
-        board.draw_squares()
-        board.draw_pieces(piece_set)
-        board.draw_legal_moves()
+            handle_event(event, board)
+        
+        if dragging:
+            mouse_pos = pg.mouse.get_pos()
+            board.draw_dragging_piece(mouse_pos)
 
         pg.display.flip()
     pg.quit()
