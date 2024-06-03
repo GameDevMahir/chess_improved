@@ -142,6 +142,12 @@ def get_colour(piece: str) -> str | None:
 def get_piecetype(piece: str) -> str:
     return piece[1] if piece else None
 
+def within_limits(pos: tuple) -> bool:
+    if (0 <= pos[0] <= 7) and (0 <= pos[1] <= 7):
+        return True
+    else:
+        return False
+
 #-----Functions to return all legal moves in a certain direction----#
 class Directions():
     def __init__(self, start_pos: tuple, colour: str) -> None:
@@ -402,10 +408,13 @@ class PieceManager():
     def valid_knight_moves(self) -> List[tuple]:
         #L-shape in 8 directions
         all_valid_moves = []
-        
-        for x in range(8):
-            for y in range(8):
-                all_valid_moves.append((x,y))
+              
+        for row_change in [1, -1, 2, -2]:
+            col_change = 3-abs(row_change) 
+            for sign in [1, -1]:
+                new_pos = (self.row + row_change, self.col + sign*col_change)
+                if within_limits(new_pos) and get_colour(get_piece(new_pos)) != self.colour:
+                    all_valid_moves.append(new_pos)
 
         return all_valid_moves
 
