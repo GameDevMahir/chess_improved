@@ -1,3 +1,12 @@
+#TODO:
+#En Passant
+#Checks
+#Checkmate and Stalemate
+#Timer
+#Borders & Customization
+#Main Menu
+#Multiplayer
+#AI Engine
 
 import pygame as pg
 import os
@@ -9,13 +18,17 @@ from typing import List
 WIDTH: int = 800
 HEIGHT: int = 800
 square_side: int = WIDTH/8
+piece_width = 80
+piece_height = 80
 
 #colours
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 OFF_WHITE = (240, 233, 220)
 DARK_GRAY = (45, 45, 45)
+MID_GRAY = (61, 61, 61)
 RED = (255, 0, 0)
+LIGHT_RED = (221, 60, 60)
 
 #board lists
 START_POS: List[str] = [
@@ -30,9 +43,10 @@ START_POS: List[str] = [
 boardlist: List[str] = START_POS.copy()
 
 #customization
-piece_set = 'cardinal'
-DARK_COLOUR = DARK_GRAY
+piece_set = 'cardinal' #cardinal, caifornia(65:80), maestro(, staunty, tatiana 
+DARK_COLOUR = MID_GRAY
 LIGHT_COLOUR = OFF_WHITE
+DOT_COLOUR = LIGHT_RED
 
 #flags
 turn: str = 'w'
@@ -74,7 +88,7 @@ class Board():
 
                 pg.draw.rect(self.surf, square_colour, square_rect)
                 if selected == (row, col):
-                    pg.draw.rect(self.surf, RED, square_rect, 5)
+                    pg.draw.rect(self.surf, DOT_COLOUR, square_rect, 5)
 
     
     def draw_pieces(self) -> None:
@@ -86,7 +100,7 @@ class Board():
                     img_path = f"piece/{piece_set}/{piece_name}.svg"
 
                     img = pg.image.load(img_path)
-                    img = pg.transform.smoothscale(img, (80, 80))
+                    img = pg.transform.smoothscale(img, (piece_width, piece_height))
 
                     square_rect = pg.Rect(col*square_side, row*square_side, square_side, square_side)
                     piece_rect = img.get_rect(center = square_rect.center)
@@ -99,7 +113,7 @@ class Board():
             for move in all_valid_moves:
                 row, col = move
                 center = (col*square_side+square_side//2, row*square_side+square_side//2)
-                pg.draw.circle(screen, RED, center, 10)
+                pg.draw.circle(screen, DOT_COLOUR, center, 10)
 
     def draw_dragging_piece(self, mouse_pos):
         global dragging
@@ -454,6 +468,7 @@ class PieceManager():
         all_valid_moves+=directions.n(1)+directions.s(1)+directions.w(1)+directions.e(1)
         all_valid_moves+=directions.ne(1)+directions.sw(1)+directions.nw(1)+directions.se(1)
 
+        #Castling
         if self.colour == 'w':
             if len(directions.e(3)) == 2 and white_kingside_castle:
                 all_valid_moves.append((self.row, self.col+2))
@@ -519,24 +534,27 @@ def castling_move_check(piece: str, pos: tuple) -> None:
 
 #Moves a piece from one position to another in boardlist
 def move(start_pos: tuple, end_pos: tuple) -> None:
-    global boardlist, moves, turn
+    global boardlist, turn
     start_row, start_col = start_pos
     end_row, end_col = end_pos
 
     piece_to_move = boardlist[start_row][start_col]
 
-    boardlist[end_row][end_col] = piece_to_move #Make ending position the piece
-    boardlist[start_row][start_col] = '' #Remove the piece from starting position
-
-    moves += 1
-    turn = opp_colour(turn)
-
     #Castling
     castling_move_check(piece_to_move, start_pos)
     if get_piecetype(piece_to_move) == 'K':
         match (end_col - start_col):
-            case 2: move((start_row, 7), (start_row, end_col-1)) #Kingside
-            case -2: move((start_row, 0), (start_row, end_col+1)) #Queenside
+            case 2: 
+                move((start_row, 7), (start_row, end_col-1)) #Kingside
+                turn = opp_colour(turn)
+            case -2: 
+                move((start_row, 0), (start_row, end_col+1)) #Queenside
+                turn = opp_colour(turn)
+
+    boardlist[end_row][end_col] = piece_to_move #Make ending position the piece
+    boardlist[start_row][start_col] = '' #Remove the piece from starting position
+
+    turn = opp_colour(turn)
 
 def handle_event(event, board) -> None:
     global selected, dragging
