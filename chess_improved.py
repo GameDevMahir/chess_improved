@@ -42,6 +42,11 @@ dragging = ()
 check = False
 win = ''
 
+white_queenside_castle = True
+white_kingside_castle = True
+black_queenside_castle = True
+black_kingside_castle = True
+
 #creating screen
 pg.init()
 screen = pg.display.set_mode((WIDTH, HEIGHT))
@@ -398,7 +403,9 @@ class PieceManager():
         #L-shape in 8 directions
         all_valid_moves = []
         
-
+        for x in range(8):
+            for y in range(8):
+                all_valid_moves.append((x,y))
 
         return all_valid_moves
 
@@ -412,7 +419,6 @@ class PieceManager():
         return all_valid_moves
 
     def valid_rook_moves(self) -> List[tuple]:
-        #Castling
         all_valid_moves = []
         directions = Directions(self.pos, self.colour)
 
@@ -431,14 +437,25 @@ class PieceManager():
         return all_valid_moves
 
     def valid_king_moves(self) -> List[tuple]:
-        #Castling: 2 steps to either side if no pieces between king and that rook
-        #and king not moved, that rook not moved
-        #Check
+
+        global white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
         all_valid_moves = []
         directions = Directions(self.pos, self.colour)
 
         all_valid_moves+=directions.n(1)+directions.s(1)+directions.w(1)+directions.e(1)
         all_valid_moves+=directions.ne(1)+directions.sw(1)+directions.nw(1)+directions.se(1)
+
+        if self.colour == 'w':
+            if len(directions.e(3)) == 2 and white_kingside_castle:
+                all_valid_moves.append((self.row, self.col+2))
+            if len(directions.w(4)) == 3 and white_queenside_castle:
+                all_valid_moves.append((self.row, self.col-2))
+
+        if self.colour == 'b':
+            if len(directions.e(3)) == 2 and black_kingside_castle:
+                all_valid_moves.append((self.row, self.col+2))
+            if len(directions.w(4)) == 3 and black_queenside_castle:
+                all_valid_moves.append((self.row, self.col-2))
 
         return all_valid_moves
 
@@ -474,17 +491,43 @@ def promotion_check() -> None:
         if piece == 'bP':
             boardlist[7][col] = 'bQ'
 
+def castling_move_check(piece: str, pos: tuple) -> None:
+    global white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
+    if get_piecetype(piece) == 'R':
+        match pos:
+            case (0,0): black_queenside_castle = False
+            case (0,7): black_kingside_castle = False
+            case (7,0): white_queenside_castle = False
+            case (7,7): white_kingside_castle = False
+
+    if piece == 'wK':
+        white_kingside_castle = False
+        white_queenside_castle = False
+    if piece == 'bK':
+        black_kingside_castle = False
+        black_queenside_castle = False
+
+
 #Moves a piece from one position to another in boardlist
 def move(start_pos: tuple, end_pos: tuple) -> None:
     global boardlist, moves, turn
     start_row, start_col = start_pos
     end_row, end_col = end_pos
 
-    boardlist[end_row][end_col] = boardlist[start_row][start_col] #Make ending position the piece
+    piece_to_move = boardlist[start_row][start_col]
+
+    boardlist[end_row][end_col] = piece_to_move #Make ending position the piece
     boardlist[start_row][start_col] = '' #Remove the piece from starting position
 
     moves += 1
     turn = opp_colour(turn)
+
+    #Castling
+    castling_move_check(piece_to_move, start_pos)
+    if get_piecetype(piece_to_move) == 'K':
+        match (end_col - start_col):
+            case 2: move((start_row, 7), (start_row, end_col-1)) #Kingside
+            case -2: move((start_row, 0), (start_row, end_col+1)) #Queenside
 
 def handle_event(event, board) -> None:
     global selected, dragging
