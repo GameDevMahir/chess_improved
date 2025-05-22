@@ -1,7 +1,8 @@
 #TODO:
-#En Passant
-#Checks
+#En Passant, King cannot castle through check, Underpromotion
+#All pieces of a colour must block or capture checking piece
 #Checkmate and Stalemate
+#50 move draw, draw by repetition, draw by insufficient material
 #Timer
 #Borders & Customization
 #Main Menu
@@ -9,8 +10,8 @@
 #AI Engine
 
 import pygame as pg
+import copy
 import os
-from PIL import Image
 import math
 from typing import List
 
@@ -41,6 +42,17 @@ START_POS: List[str] = [
     ['wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP'],
     ['wR', 'wN', 'wB', 'wQ', 'wK', 'wB', 'wN', 'wR']]
 boardlist: List[str] = START_POS.copy()
+'''[
+    ['bR', '', '', '', 'bK', '', '', 'bR'],
+    ['', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['wR', '', '', '', 'wK', '', '', 'wR']
+]
+'''
 
 #customization
 piece_set = 'cardinal' #cardinal, caifornia(65:80), maestro(, staunty, tatiana 
@@ -50,16 +62,15 @@ DOT_COLOUR = LIGHT_RED
 
 #flags
 turn: str = 'w'
-moves = 0
-selected = ()
-dragging = ()
-check = False
+selected: tuple = ()
+dragging: tuple = ()
+check = ''
 win = ''
 
-white_queenside_castle = True
-white_kingside_castle = True
-black_queenside_castle = True
-black_kingside_castle = True
+white_queenside_castle: bool = True
+white_kingside_castle: bool = True
+black_queenside_castle: bool = True
+black_kingside_castle: bool = True
 
 #creating screen
 pg.init()
@@ -67,10 +78,14 @@ screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("Chess")
 screen.fill(WHITE)
 
+code_dir = os.path.dirname(__file__)
+images_dir = os.path.join(code_dir, 'piece', piece_set)
+
 class Board():
-    def __init__(self) -> None:
+    def __init__(self, boardlist) -> None:
         global screen
         self.surf = screen
+        self.boardlist = boardlist
 
     # Draws out the chess board
     def draw_squares(self) -> None:
@@ -92,12 +107,12 @@ class Board():
 
     
     def draw_pieces(self) -> None:
-        global dragging, piece_set
+        global dragging, piece_set, images_dir
         for row in range(8):
             for col in range(8):
                 piece_name = boardlist[row][col]
                 if piece_name and (row, col) != dragging:
-                    img_path = f"piece/{piece_set}/{piece_name}.svg"
+                    img_path = os.path.join(images_dir, piece_name+'.svg')
 
                     img = pg.image.load(img_path)
                     img = pg.transform.smoothscale(img, (piece_width, piece_height))
@@ -107,22 +122,25 @@ class Board():
                     self.surf.blit(img, piece_rect)
     
     def draw_legal_moves(self) -> None:
-        global selected
+        global selected, turn
         if selected:
-            all_valid_moves = valid_moves(selected)
-            for move in all_valid_moves:
-                row, col = move
-                center = (col*square_side+square_side//2, row*square_side+square_side//2)
-                pg.draw.circle(screen, DOT_COLOUR, center, 10)
+            colour = get_colour(get_piece(self.boardlist, selected))
+            if colour == turn:
+                all_valid_moves = valid_moves(self.boardlist, selected)
+
+                for move in all_valid_moves:
+                    row, col = move
+                    center = (col*square_side+square_side//2, row*square_side+square_side//2)
+                    pg.draw.circle(screen, DOT_COLOUR, center, 10)
 
     def draw_dragging_piece(self, mouse_pos):
-        global dragging
+        global dragging, images_dir
         row, col = dragging
         mx, my = mouse_pos
 
-        piece_name = get_piece(dragging)
+        piece_name = get_piece(self.boardlist, dragging)
 
-        img_path = f"piece/{piece_set}/{piece_name}.svg"
+        img_path = os.path.join(images_dir, piece_name+'.svg')
         img = pg.image.load(img_path)
         img = pg.transform.smoothscale(img, (80, 80))
 
@@ -142,19 +160,18 @@ def convert_coords(abs_coords: tuple) -> tuple:
 def opp_colour(colour) -> None:
     return 'w' if colour == 'b' else 'b'
 
-def get_piece(pos: tuple) -> str | None:
-    global boardlist
+def get_piece(boardlist, pos: tuple) -> str:
     row, col = pos
     try:
         return boardlist[row][col]
     except IndexError:
         return None
     
-def get_colour(piece: str) -> str | None:
-    return piece[0] if piece else None
+def get_colour(piece: str) -> str:
+    return piece[0] if piece else ''
 
 def get_piecetype(piece: str) -> str:
-    return piece[1] if piece else None
+    return piece[1] if piece else ''
 
 def within_limits(pos: tuple) -> bool:
     if (0 <= pos[0] <= 7) and (0 <= pos[1] <= 7):
@@ -164,8 +181,7 @@ def within_limits(pos: tuple) -> bool:
 
 #-----Functions to return all legal moves in a certain direction----#
 class Directions():
-    def __init__(self, start_pos: tuple, colour: str) -> None:
-        global boardlist
+    def __init__(self, boardlist, start_pos: tuple, colour: str) -> None:
         self.start_pos = start_pos
         self.start_row, self.start_col = self.start_pos
         self.colour = colour
@@ -371,13 +387,11 @@ class Directions():
 #-----Functions to return all legal moves for each piece type-----#
 class PieceManager():
     def __init__(self, pos: tuple, colour: str) -> List[tuple]:
-        global boardlist
         self.pos = pos
         self.row, self.col = self.pos
         self.colour = colour
-        self.boardlist = boardlist
 
-    def valid_pawn_moves(self) -> List[tuple]:
+    def valid_pawn_moves(self, boardlist) -> List[tuple]:
         #TODO: en passant
         all_valid_moves = []
 
@@ -387,16 +401,16 @@ class PieceManager():
             ne = (self.row-1, self.col+1)
             nw = (self.row-1, self.col-1)
 
-            if not get_piece(n1):
+            if not get_piece(boardlist, n1):
                 all_valid_moves.append(n1)
 
-            if not get_piece(n2) and self.row == 6:
-                all_valid_moves.append(n2)
+                if not get_piece(boardlist, n2) and self.row == 6:
+                    all_valid_moves.append(n2)
 
-            if get_colour(get_piece(ne)) == opp_colour(self.colour):
+            if get_colour(get_piece(boardlist, ne)) == opp_colour(self.colour):
                 all_valid_moves.append(ne)
 
-            if get_colour(get_piece(nw)) == opp_colour(self.colour):
+            if get_colour(get_piece(boardlist, nw)) == opp_colour(self.colour):
                 all_valid_moves.append(nw)
             
         if self.colour == 'b':
@@ -405,65 +419,65 @@ class PieceManager():
             se = (self.row+1, self.col+1)
             sw = (self.row+1, self.col-1)
 
-            if not get_piece(s1):
+            if not get_piece(boardlist, s1):
                 all_valid_moves.append(s1)
 
-            if not get_piece(s2) and self.row == 1:
-                all_valid_moves.append(s2)
+                if not get_piece(boardlist, s2) and self.row == 1:
+                    all_valid_moves.append(s2)
 
-            if get_colour(get_piece(se)) == opp_colour(self.colour):
+            if get_colour(get_piece(boardlist, se)) == opp_colour(self.colour):
                 all_valid_moves.append(se)
 
-            if get_colour(get_piece(sw)) == opp_colour(self.colour):
+            if get_colour(get_piece(boardlist, sw)) == opp_colour(self.colour):
                 all_valid_moves.append(sw)
 
         return all_valid_moves
 
-    def valid_knight_moves(self) -> List[tuple]:
-        #L-shape in 8 directions
+    def valid_knight_moves(self, boardlist) -> List[tuple]:
         all_valid_moves = []
               
         for row_change in [1, -1, 2, -2]:
             col_change = 3-abs(row_change) 
             for sign in [1, -1]:
                 new_pos = (self.row + row_change, self.col + sign*col_change)
-                if within_limits(new_pos) and get_colour(get_piece(new_pos)) != self.colour:
+                if within_limits(new_pos) and get_colour(get_piece(boardlist, new_pos)) != self.colour:
                     all_valid_moves.append(new_pos)
 
         return all_valid_moves
 
-    def valid_bishop_moves(self) -> List[tuple]:
+    def valid_bishop_moves(self, boardlist) -> List[tuple]:
 
         all_valid_moves = []
-        directions = Directions(self.pos, self.colour)
+        directions = Directions(boardlist, self.pos, self.colour)
 
         all_valid_moves+=directions.ne(8)+directions.sw(8)+directions.nw(8)+directions.se(8)
 
         return all_valid_moves
 
-    def valid_rook_moves(self) -> List[tuple]:
+    def valid_rook_moves(self, boardlist) -> List[tuple]:
         all_valid_moves = []
-        directions = Directions(self.pos, self.colour)
+        directions = Directions(boardlist, self.pos, self.colour)
 
         all_valid_moves+=directions.n(8)+directions.s(8)+directions.w(8)+directions.e(8)
 
         return all_valid_moves
         
-    def valid_queen_moves(self) -> List[tuple]:
+    def valid_queen_moves(self, boardlist) -> List[tuple]:
 
         all_valid_moves = []
-        directions = Directions(self.pos, self.colour)
+        directions = Directions(boardlist, self.pos, self.colour)
 
         all_valid_moves+=directions.n(8)+directions.s(8)+directions.w(8)+directions.e(8)
         all_valid_moves+=directions.ne(8)+directions.sw(8)+directions.nw(8)+directions.se(8)
 
         return all_valid_moves
 
-    def valid_king_moves(self) -> List[tuple]:
+    def valid_king_moves(self, boardlist) -> List[tuple]:
 
         global white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
         all_valid_moves = []
-        directions = Directions(self.pos, self.colour)
+
+        directions = Directions(boardlist, self.pos, self.colour)
 
         all_valid_moves+=directions.n(1)+directions.s(1)+directions.w(1)+directions.e(1)
         all_valid_moves+=directions.ne(1)+directions.sw(1)+directions.nw(1)+directions.se(1)
@@ -483,27 +497,38 @@ class PieceManager():
 
         return all_valid_moves
 
-#Checks if a move is valid given starting and ending position of move
-def valid_moves(start_pos: tuple) -> List[tuple]:
-    global boardlist, turn, check
-    start_row, start_col = start_pos
-    piece = boardlist[start_row][start_col]
-
+def possible_moves(boardlist, start_pos):
+    piece = get_piece(boardlist, start_pos)
     colour = get_colour(piece)
     piecetype = get_piecetype(piece)
-
-    if colour != turn: #Not your turn/moving opponent's piece
-        return []
+    all_valid_moves = []
 
     piece_manager = PieceManager(start_pos, colour)
     match piecetype:
-        case '': return []
-        case 'P': return piece_manager.valid_pawn_moves()
-        case 'N': return piece_manager.valid_knight_moves()
-        case 'B': return piece_manager.valid_bishop_moves()
-        case 'R': return piece_manager.valid_rook_moves()
-        case 'Q': return piece_manager.valid_queen_moves()
-        case 'K': return piece_manager.valid_king_moves()
+        case '': return[]
+        case 'P': return piece_manager.valid_pawn_moves(boardlist)
+        case 'N': return piece_manager.valid_knight_moves(boardlist)
+        case 'B': return piece_manager.valid_bishop_moves(boardlist)
+        case 'R': return piece_manager.valid_rook_moves(boardlist)
+        case 'Q': return piece_manager.valid_queen_moves(boardlist)
+        case 'K': return piece_manager.valid_king_moves(boardlist)
+    
+    return []
+
+#Checks if a move is valid given starting and ending position of move
+def valid_moves(boardlist, start_pos: tuple) -> List[tuple]:
+    global turn
+    
+    piece = get_piece(boardlist, start_pos)
+    colour = get_colour(piece)
+    piecetype = get_piecetype(piece)
+
+    if colour != turn:
+        return []
+    
+    moves = possible_moves(boardlist, start_pos)
+    all_valid_moves = legal_check_moves(boardlist, start_pos, colour, moves)
+    return all_valid_moves
 
 def promotion_check() -> None:
     global boardlist
@@ -516,7 +541,8 @@ def promotion_check() -> None:
             boardlist[7][col] = 'bQ'
 
 def castling_move_check(piece: str, pos: tuple) -> None:
-    global white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
+    #Local vars, not global
+    white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle = True, True, True, True
     if get_piecetype(piece) == 'R':
         match pos:
             case (0,0): black_queenside_castle = False
@@ -531,33 +557,50 @@ def castling_move_check(piece: str, pos: tuple) -> None:
         black_kingside_castle = False
         black_queenside_castle = False
 
+    return white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
+
+def check_for_checks(boardlist) -> str:
+    for row in range(8):
+        for col in range(8):
+            pos = (row, col)
+            piece = get_piece(boardlist, pos)
+            moves = possible_moves(boardlist, pos)
+            for move in moves:
+                if get_piece(boardlist, move) == 'wK': return 'w'
+                if get_piece(boardlist, move) == 'bK': return 'b'
+    return ''
+
+def legal_check_moves(boardlist: List[str], pos: tuple, colour: str, possible_moves: List[tuple]):
+    all_valid_moves = []
+    for possible_move in possible_moves:
+            simulated_board = [row[:] for row in boardlist] #Deep copy
+            simulated_board = move(simulated_board, pos, possible_move) #Make the move
+            if check_for_checks(simulated_board) != colour: #Move is legal if you are not in check after it
+                all_valid_moves.append(possible_move)
+    return all_valid_moves
 
 #Moves a piece from one position to another in boardlist
-def move(start_pos: tuple, end_pos: tuple) -> None:
-    global boardlist, turn
+def move(boardlist: List[str], start_pos: tuple, end_pos: tuple) -> None:
     start_row, start_col = start_pos
     end_row, end_col = end_pos
 
-    piece_to_move = boardlist[start_row][start_col]
+    piece_to_move = get_piece(boardlist, start_pos)
 
     #Castling
     castling_move_check(piece_to_move, start_pos)
     if get_piecetype(piece_to_move) == 'K':
         match (end_col - start_col):
-            case 2: 
-                move((start_row, 7), (start_row, end_col-1)) #Kingside
-                turn = opp_colour(turn)
-            case -2: 
-                move((start_row, 0), (start_row, end_col+1)) #Queenside
-                turn = opp_colour(turn)
+
+            case 2: boardlist = move(boardlist, (start_row, 7), (start_row, end_col-1)) #Kingside
+            case -2: boardlist = move(boardlist, (start_row, 0), (start_row, end_col+1)) #Queenside
 
     boardlist[end_row][end_col] = piece_to_move #Make ending position the piece
     boardlist[start_row][start_col] = '' #Remove the piece from starting position
 
-    turn = opp_colour(turn)
+    return boardlist
 
 def handle_event(event, board) -> None:
-    global selected, dragging
+    global boardlist, selected, dragging, turn
 
     if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
         #Get coordinates of the clicked square
@@ -565,7 +608,7 @@ def handle_event(event, board) -> None:
         col, row = convert_coords(mouse_pos)
 
         selected = (row, col)
-        if get_piece(selected):
+        if get_piece(boardlist, selected):
             dragging = (row, col)
 
     if event.type == pg.MOUSEBUTTONUP and event.button == 1:
@@ -574,16 +617,21 @@ def handle_event(event, board) -> None:
         col, row = convert_coords(mouse_pos)
         end_pos = (row, col)
 
-        if end_pos in valid_moves(selected):
-            move(selected, end_pos)
+        colour = get_colour(get_piece(boardlist, selected))
+        all_valid_moves = valid_moves(boardlist, selected)
+
+        if end_pos in all_valid_moves and turn == colour:
+            boardlist = move(boardlist, selected, end_pos)
+            turn = opp_colour(turn)
 
 def main():
-    global boardlist
+    global boardlist, check
     running = True
-    board = Board()
+    board = Board(boardlist)
 
     while running:
-        promotion_check()                     
+        promotion_check()
+        check = check_for_checks(boardlist)                     
         board.draw_squares()
         board.draw_pieces()
         board.draw_legal_moves()
@@ -594,8 +642,9 @@ def main():
             handle_event(event, board)
         
         if dragging:
-            mouse_pos = pg.mouse.get_pos()
-            board.draw_dragging_piece(mouse_pos)
+            if get_piece(boardlist, dragging):
+                mouse_pos = pg.mouse.get_pos()
+                board.draw_dragging_piece(mouse_pos)
 
         pg.display.flip()
     pg.quit()
