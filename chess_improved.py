@@ -1,9 +1,15 @@
 #TODO:
+#Make click-to-move possible instead of just dragging?
+#Fix castling logic
+#Remove global variables where possible
+#Remove counter checks
 #En Passant
-#King cannot castle through check
+#King should not be able to castle through a check (when squares in between are attacked)
 #Underpromotion
-#Checkmate and Stalemate
-#50 move draw, draw by repetition, draw by insufficient material
+#Checkmate and Stalemate - checkmate if all_valid_moves is empty and in check, stalemate if all_valid_moves is empty and not in check
+#50 move draw
+#Draw by repetition
+#Draw by insufficient material
 #Timer
 #Borders & Customization
 #Main Menu
@@ -96,7 +102,7 @@ class Board():
                 if selected == (row, col):
                     pg.draw.rect(self.surf, DOT_COLOUR, square_rect, 5)
 
-    
+    #Draws all pieces on the board except the one being dragged
     def draw_pieces(self, dragging: tuple[int, int]) -> None:
         global PIECE_SET, IMAGES_DIR, piece_width, piece_height, square_side
         for row in range(8):
@@ -112,6 +118,7 @@ class Board():
                     piece_rect = img.get_rect(center = square_rect.center)
                     self.surf.blit(img, piece_rect)
     
+    #Draws dots on all legal moves for selected piece
     def draw_legal_moves(self, selected: tuple[int, int], turn: str) -> None:
         global DOT_COLOUR, square_side
         if selected:
@@ -126,6 +133,7 @@ class Board():
                     center = convert_coords_relative_to_abs((row, col))
                     pg.draw.circle(screen, DOT_COLOUR, center, 10)
 
+    #Draws the piece being dragged at mouse position
     def draw_dragging_piece(self, dragging: tuple[int, int], mouse_pos: tuple[int, int]) -> None:
         global IMAGES_DIR
         row, col = dragging
@@ -142,7 +150,7 @@ class Board():
         
         self.surf.blit(img, img_rect)
 
-#-----Utility Functions-----#  
+#-----Utility/Helper Functions-----#  
 # Converts absolute coordinates to relative coordinates of square eg. (132, 273) -> (1, 2)         
 def convert_coords_abs_to_relative(abs_coords: tuple[int, int]) -> tuple[int, int]:
     ax, ay = abs_coords
@@ -506,7 +514,7 @@ class PieceManager():
 
         return all_valid_moves
 
-#Returns all possible moves for a piece at start_pos regardless of checks
+#Returns all possible moves for a piece at start_pos regardless of checks or turn
 def possible_moves(board_list: List[str], start_pos: tuple[int, int]) -> List[tuple[int, int]]:
     piece = get_piece(board_list, start_pos)
     colour = get_colour(piece)
@@ -522,7 +530,7 @@ def possible_moves(board_list: List[str], start_pos: tuple[int, int]) -> List[tu
         case 'Q': return piece_manager.valid_queen_moves(board_list)
         case 'K': return piece_manager.valid_king_moves(board_list)
 
-#Returns all valid moves for a piece at start_pos, considering checks
+#Returns all valid moves for a piece at start_pos, considering checks and turn
 def valid_moves(board_list: List[str], start_pos: tuple[int, int]) -> List[tuple[int, int]]:
     global turn
     
@@ -570,16 +578,17 @@ def castling_move_check(piece: str, pos: tuple[int, int]) -> None:
 
     return white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
 
-#Checks if either king is in check, returns 'w' if white is in check, 'b' if black is in check, '' if no check
+#Checks if either king is in check, returns 'w' if white is in check, 'b' if black is in check, '' if no check, 'wb' if both in check
 def check_for_checks(board_list: List[str]) -> str:
+    checks: str = ''
     for row in range(8):
         for col in range(8):
             pos = (row, col)
             moves = possible_moves(board_list, pos)
             for move in moves:
-                if get_piece(board_list, move) == 'wK': return 'w'
-                if get_piece(board_list, move) == 'bK': return 'b'
-    return ''
+                if get_piece(board_list, move) == 'wK': checks += 'w'
+                if get_piece(board_list, move) == 'bK': checks += 'b'
+    return checks
 
 #Filters possible moves to only legal moves that do not put (or keep) own king in check
 def legal_check_moves(board_list: List[str], pos: tuple[int, int], colour: str, possible_moves: List[tuple[int, int]]):
@@ -587,7 +596,7 @@ def legal_check_moves(board_list: List[str], pos: tuple[int, int], colour: str, 
     for possible_move in possible_moves:
             simulated_board = [row[:] for row in board_list] #Deep copy of board_list
             simulated_board = move(simulated_board, pos, possible_move) #Make the move
-            if check_for_checks(simulated_board) != colour: #Move is legal if you are not in check after it
+            if colour not in check_for_checks(simulated_board): #Move is legal if you are not in check after it
                 all_valid_moves.append(possible_move)
     return all_valid_moves
 
@@ -610,9 +619,13 @@ def move(board_list: List[str], start_pos: tuple[int, int], end_pos: tuple[int, 
 
     return board_list
 
-def handle_event(event, board_list: List[str]) -> None:
+#Handles user input events, returns False if the game is to be quit otherwise returns True
+def handle_event(event, board_list: List[str]) -> bool:
     global selected, dragging, turn
 
+    if event.type == pg.QUIT:
+        return False
+    
     #left mouse button down
     if event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
         #Get coordinates of the clicked square
@@ -636,6 +649,8 @@ def handle_event(event, board_list: List[str]) -> None:
         if end_pos in all_valid_moves and turn == colour:
             board_list = move(board_list, selected, end_pos)
             turn = opp_colour(turn)
+    
+    return True
 
 def main():
     global board_list, check, dragging, screen, selected, turn
@@ -650,19 +665,15 @@ def main():
         board.draw_legal_moves(selected, turn)
 
         for event in pg.event.get():
-            if event.type == pg.QUIT:
-                running = False
-
-            handle_event(event, board_list)
+            running = handle_event(event, board_list)
         
-        if dragging:
-            if get_piece(board_list, dragging):
-                mouse_pos = pg.mouse.get_pos()
-                board.draw_dragging_piece(dragging, mouse_pos)
+        if dragging and get_piece(board_list, dragging):
+            mouse_pos = pg.mouse.get_pos()
+            board.draw_dragging_piece(dragging, mouse_pos)
 
         pg.display.flip()
-    pg.quit()
 
+    pg.quit()
 
 if __name__ == '__main__':
     main()
