@@ -497,7 +497,6 @@ class PieceManager():
         return all_valid_moves
 
     def valid_king_moves(self, board_list: List[str]) -> List[tuple[int, int]]:
-
         global white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
         all_valid_moves = []
 
@@ -567,26 +566,25 @@ def promotion_check() -> None:
             board_list[7][col] = 'bQ'
 
 
-#Updates castling availability after a king or rook has moved
-def castling_move_check(piece: str, pos: tuple[int, int]) -> None:
-    white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle = True, True, True, True
+#Updates castling availability after a move
+#Returns 'wK', 'wQ', 'bK', 'bQ', 'w' or 'b' based on whichever isn't available
+def castling_move_check(piece: str, pos: tuple[int, int]) -> str:
+    out: str = ''
 
     if get_piecetype(piece) == 'R':
         match pos:
-            case (0,0): black_queenside_castle = False
-            case (0,7): black_kingside_castle = False
-            case (7,0): white_queenside_castle = False
-            case (7,7): white_kingside_castle = False
+            case (0,0): out = 'bQ'
+            case (0,7): out = 'bK'
+            case (7,0): out = 'wQ'
+            case (7,7): out = 'wK'
 
     if piece == 'wK':
-        white_kingside_castle = False
-        white_queenside_castle = False
+        out = 'w'
 
     if piece == 'bK':
-        black_kingside_castle = False
-        black_queenside_castle = False
+        out = 'b'
 
-    return white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
+    return out
 
 #Checks if a square is attacked by any piece of the given colour, except king
 def is_attacked(board_list: List[str], pos: tuple[int, int], colour: str) -> bool:
@@ -652,6 +650,7 @@ def move(board_list: List[str], start_pos: tuple[int, int], end_pos: tuple[int, 
 #Handles user input events, returns False if the game is to be quit otherwise returns True
 def handle_event(event, board_list: List[str]) -> bool:
     global selected, dragging, turn
+    global white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
 
     if event.type == pg.QUIT:
         return False
@@ -681,7 +680,14 @@ def handle_event(event, board_list: List[str]) -> bool:
         if end_pos in all_valid_moves and turn == colour:
             board_list = move(board_list, selected, end_pos)
             #Update castling availability after move
-            white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle = castling_move_check(piece, selected)
+            not_available: str = castling_move_check(piece, selected)
+            match not_available:
+                case 'wK': white_kingside_castle = False
+                case 'wQ': white_queenside_castle = False
+                case 'bK': black_kingside_castle = False
+                case 'bQ': black_queenside_castle = False
+                case 'w': white_kingside_castle = False; white_queenside_castle = False
+                case 'b': black_kingside_castle = False; black_queenside_castle = False
             #Switch turn
             turn = opp_colour(turn)
     
@@ -694,8 +700,8 @@ def main():
     board = Board(screen, board_list)
 
     while running:
-        promotion_check() #could put this in handle_event after a move is made instead, checking if a pawn moved
-        check = check_for_checks(board_list)                     
+        check = check_for_checks(board_list)    
+        promotion_check()                 
         board.draw_squares()
         board.draw_pieces(dragging)
         board.draw_legal_moves(selected, turn)
