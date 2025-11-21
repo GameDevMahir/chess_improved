@@ -1,6 +1,5 @@
 #TODO:
 #Make click-to-move possible instead of just dragging?
-#Fix castling logic
 #Remove global variables where possible
 #Remove counter checks
 #En Passant
@@ -25,18 +24,18 @@ from typing import Final
 #dimensions and sizes
 WIDTH: int = 800
 HEIGHT: int = 800
-square_side: int = WIDTH/8
-piece_width = 80
-piece_height = 80
+square_side: int = WIDTH//8
+piece_width: int = 80
+piece_height: int = 80
 
-#colours
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-OFF_WHITE = (240, 233, 220)
-DARK_GRAY = (45, 45, 45)
-MID_GRAY = (61, 61, 61)
-RED = (255, 0, 0)
-LIGHT_RED = (221, 60, 60)
+#colours in RGB
+BLACK: tuple[int, int, int] = (0, 0, 0)
+WHITE: tuple[int, int, int] = (255, 255, 255)
+OFF_WHITE: tuple[int, int, int] = (240, 233, 220)
+DARK_GRAY: tuple[int, int, int] = (45, 45, 45)
+MID_GRAY: tuple[int, int, int] = (61, 61, 61)
+RED: tuple[int, int, int] = (255, 0, 0)
+LIGHT_RED: tuple[int, int, int] = (221, 60, 60)
 
 #board lists
 START_POS: Final[List[str]] = [
@@ -102,7 +101,7 @@ class Board():
                 if selected == (row, col):
                     pg.draw.rect(self.surf, DOT_COLOUR, square_rect, 5)
 
-    #Draws all pieces on the board except the one being dragged
+    #Draws all pieces on the board except the one being dragged (if any)
     def draw_pieces(self, dragging: tuple[int, int]) -> None:
         global PIECE_SET, IMAGES_DIR, piece_width, piece_height, square_side
         for row in range(8):
@@ -150,6 +149,7 @@ class Board():
         
         self.surf.blit(img, img_rect)
 
+
 #-----Utility/Helper Functions-----#  
 # Converts absolute coordinates to relative coordinates of square eg. (132, 273) -> (1, 2)         
 def convert_coords_abs_to_relative(abs_coords: tuple[int, int]) -> tuple[int, int]:
@@ -164,27 +164,33 @@ def convert_coords_relative_to_abs(rel_coords: tuple[int, int]) -> tuple[int, in
     abs_coords = (col*square_side + square_side//2, row*square_side + square_side//2)
     return abs_coords
 
+# Returns opposite colour of the given colour
 def opp_colour(colour) -> None:
     return 'w' if colour == 'b' else 'b'
 
+# Returns the piece at the given position on the board, or None if out of bounds
 def get_piece(board_list, pos: tuple[int, int]) -> str:
     row, col = pos
     try:
         return board_list[row][col]
     except IndexError:
         return None
-    
+
+# Returns the colour ('w' or 'b') of the given piece string   
 def get_colour(piece: str) -> str:
     return piece[0] if piece else ''
 
+# Returns the piece type ('P','N','B','R','Q','K') of the given piece string
 def get_piecetype(piece: str) -> str:
     return piece[1] if piece else ''
 
+# Checks if a position is within the limits of the board
 def within_limits(pos: tuple[int, int]) -> bool:
     if (0 <= pos[0] <= 7) and (0 <= pos[1] <= 7):
         return True
     else:
         return False
+
 
 #-----Functions to return all legal moves in a certain direction----#
 class Directions():
@@ -391,6 +397,7 @@ class Directions():
             
         return all_valid_moves
 
+
 #-----Functions to return all legal moves for each piece type-----#
 class PieceManager():
     def __init__(self, pos: tuple[int, int], colour: str) -> List[tuple[int, int]]:
@@ -501,15 +508,15 @@ class PieceManager():
 
         #Castling
         if self.colour == 'w':
-            if len(directions.e(3)) == 2 and white_kingside_castle:
+            if len(directions.e(3)) == 2 and white_kingside_castle and not is_attacked(board_list, (7,5), 'b'):
                 all_valid_moves.append((self.row, self.col+2))
-            if len(directions.w(4)) == 3 and white_queenside_castle:
+            if len(directions.w(4)) == 3 and white_queenside_castle and not is_attacked(board_list, (7,3), 'b'):
                 all_valid_moves.append((self.row, self.col-2))
 
         if self.colour == 'b':
-            if len(directions.e(3)) == 2 and black_kingside_castle:
+            if len(directions.e(3)) == 2 and black_kingside_castle and not is_attacked(board_list, (0,5), 'w'):
                 all_valid_moves.append((self.row, self.col+2))
-            if len(directions.w(4)) == 3 and black_queenside_castle:
+            if len(directions.w(4)) == 3 and black_queenside_castle and not is_attacked(board_list, (0,3), 'w'):
                 all_valid_moves.append((self.row, self.col-2))
 
         return all_valid_moves
@@ -530,6 +537,7 @@ def possible_moves(board_list: List[str], start_pos: tuple[int, int]) -> List[tu
         case 'Q': return piece_manager.valid_queen_moves(board_list)
         case 'K': return piece_manager.valid_king_moves(board_list)
 
+
 #Returns all valid moves for a piece at start_pos, considering checks and turn
 def valid_moves(board_list: List[str], start_pos: tuple[int, int]) -> List[tuple[int, int]]:
     global turn
@@ -544,6 +552,7 @@ def valid_moves(board_list: List[str], start_pos: tuple[int, int]) -> List[tuple
     all_valid_moves = legal_check_moves(board_list, start_pos, colour, moves)
     return all_valid_moves
 
+
 #Promotes pawns that reach the opposite end to queens
 def promotion_check() -> None:
     global board_list
@@ -557,10 +566,11 @@ def promotion_check() -> None:
         if piece == 'bP':
             board_list[7][col] = 'bQ'
 
+
 #Updates castling availability after a king or rook has moved
 def castling_move_check(piece: str, pos: tuple[int, int]) -> None:
-    #Local vars, not global
     white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle = True, True, True, True
+
     if get_piecetype(piece) == 'R':
         match pos:
             case (0,0): black_queenside_castle = False
@@ -578,7 +588,20 @@ def castling_move_check(piece: str, pos: tuple[int, int]) -> None:
 
     return white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle
 
-#Checks if either king is in check, returns 'w' if white is in check, 'b' if black is in check, '' if no check, 'wb' if both in check
+#Checks if a square is attacked by any piece of the given colour, except king
+def is_attacked(board_list: List[str], pos: tuple[int, int], colour: str) -> bool:
+    for row in range(8):
+        for col in range(8):
+            piece_pos = (row, col)
+            piece = get_piece(board_list, piece_pos)
+            piece_colour = get_colour(piece)
+            if piece_colour == colour and get_piecetype(piece) != 'K':
+                moves = possible_moves(board_list, piece_pos)
+                if pos in moves:
+                    return True
+    return False
+
+#Checks if either king is in check, returns 'w' if white is in check, 'b' if black is in check, 'wb' if both in check, '' if no check
 def check_for_checks(board_list: List[str]) -> str:
     checks: str = ''
     for row in range(8):
@@ -586,9 +609,10 @@ def check_for_checks(board_list: List[str]) -> str:
             pos = (row, col)
             moves = possible_moves(board_list, pos)
             for move in moves:
-                if get_piece(board_list, move) == 'wK': checks += 'w'
-                if get_piece(board_list, move) == 'bK': checks += 'b'
+                if get_piece(board_list, move) == 'wK' and 'w' not in checks: checks += 'w'
+                if get_piece(board_list, move) == 'bK' and 'b' not in checks: checks += 'b'
     return checks
+
 
 #Filters possible moves to only legal moves that do not put (or keep) own king in check
 def legal_check_moves(board_list: List[str], pos: tuple[int, int], colour: str, possible_moves: List[tuple[int, int]]):
@@ -600,6 +624,7 @@ def legal_check_moves(board_list: List[str], pos: tuple[int, int], colour: str, 
                 all_valid_moves.append(possible_move)
     return all_valid_moves
 
+
 #Moves a piece from one position to another in board_list
 def move(board_list: List[str], start_pos: tuple[int, int], end_pos: tuple[int, int]) -> List[str]:
     start_row, start_col = start_pos
@@ -608,16 +633,21 @@ def move(board_list: List[str], start_pos: tuple[int, int], end_pos: tuple[int, 
     piece_to_move = get_piece(board_list, start_pos)
 
     #Castling
-    castling_move_check(piece_to_move, start_pos)
+    #If king is moving by 2 places, move the rook as well
     if get_piecetype(piece_to_move) == 'K':
         match (end_col - start_col):
-            case 2: board_list = move(board_list, (start_row, 7), (start_row, end_col-1)) #Kingside
-            case -2: board_list = move(board_list, (start_row, 0), (start_row, end_col+1)) #Queenside
-
-    board_list[end_row][end_col] = piece_to_move #Make ending position the piece that's moving
-    board_list[start_row][start_col] = '' #Remove the piece from starting position
+            case 2: 
+                board_list = move(board_list, (start_row, 7), (start_row, end_col-1)) #Kingside
+            case -2: 
+                board_list = move(board_list, (start_row, 0), (start_row, end_col+1)) #Queenside
+    #Move the piece in board_list
+    #Change end position to piece being moved
+    board_list[end_row][end_col] = piece_to_move 
+    #Remove piece from start position
+    board_list[start_row][start_col] = ''
 
     return board_list
+
 
 #Handles user input events, returns False if the game is to be quit otherwise returns True
 def handle_event(event, board_list: List[str]) -> bool:
@@ -643,14 +673,20 @@ def handle_event(event, board_list: List[str]) -> bool:
         col, row = convert_coords_abs_to_relative(mouse_pos)
         end_pos = (row, col)
 
-        colour = get_colour(get_piece(board_list, selected))
+        piece = get_piece(board_list, selected)
+        colour = get_colour(piece)
+
         all_valid_moves = valid_moves(board_list, selected)
 
         if end_pos in all_valid_moves and turn == colour:
             board_list = move(board_list, selected, end_pos)
+            #Update castling availability after move
+            white_kingside_castle, white_queenside_castle, black_kingside_castle, black_queenside_castle = castling_move_check(piece, selected)
+            #Switch turn
             turn = opp_colour(turn)
     
     return True
+
 
 def main():
     global board_list, check, dragging, screen, selected, turn
@@ -658,7 +694,7 @@ def main():
     board = Board(screen, board_list)
 
     while running:
-        promotion_check()
+        promotion_check() #could put this in handle_event after a move is made instead, checking if a pawn moved
         check = check_for_checks(board_list)                     
         board.draw_squares()
         board.draw_pieces(dragging)
@@ -676,4 +712,4 @@ def main():
     pg.quit()
 
 if __name__ == '__main__':
-    main()
+    main() 
